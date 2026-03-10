@@ -88,6 +88,11 @@
     render();
   }
 
+  // Update login fields without full re-render to prevent keyboard dismiss
+  function updateLoginField(field, value) {
+    state[field] = value;
+  }
+
   function showNotif(msg) {
     setState({ notification: msg });
     setTimeout(() => setState({ notification: null }), 2500);
@@ -110,15 +115,17 @@
 
   async function registerEmail() {
     if (!state.loginEmail || !state.loginPassword || !state.loginName) { setState({ loginError: "Completa todos los campos" }); return; }
+    if (state.loginPassword.length < 6) { setState({ loginError: "La contraseña debe tener al menos 6 caracteres" }); return; }
     setState({ loginLoading: true, loginError: "" });
     try {
       const cred = await createUserWithEmailAndPassword(auth, state.loginEmail, state.loginPassword);
       await updateProfile(cred.user, { displayName: state.loginName });
-      setState({ user: { ...cred.user, displayName: state.loginName } });
+      // onAuthStateChanged will handle the state update automatically
     } catch(e) {
       let msg = "Error al crear cuenta";
       if (e.code === "auth/email-already-in-use") msg = "Este email ya está registrado";
       if (e.code === "auth/weak-password") msg = "La contraseña debe tener al menos 6 caracteres";
+      if (e.code === "auth/invalid-email") msg = "Email inválido";
       setState({ loginError: msg, loginLoading: false });
     }
   }
@@ -240,9 +247,9 @@
             <button onclick="setLoginView('register')" style="flex:1;background:none;border:none;padding:10px 0;cursor:pointer;font-family:'Orbitron',monospace;font-size:11px;letter-spacing:2px;color:${state.loginView==='register'?'#00ffc8':'rgba(255,255,255,0.3)'};border-bottom:${state.loginView==='register'?'2px solid #00ffc8':'2px solid transparent'};transition:all 0.2s;text-transform:uppercase">REGISTRO</button>
           </div>
           <div style="display:flex;flex-direction:column;gap:12px">
-            ${state.loginView==='register'?`<input class="input-neon" id="inp-name" placeholder="Nombre de artista" value="${state.loginName}" oninput="state.loginName=this.value" />`:''}
-            <input class="input-neon" id="inp-email" placeholder="Email" type="email" value="${state.loginEmail}" oninput="state.loginEmail=this.value" />
-            <input class="input-neon" id="inp-pass" placeholder="Contraseña" type="password" value="${state.loginPassword}" oninput="state.loginPassword=this.value" />
+            ${state.loginView==='register'?`<input class="input-neon" id="inp-name" placeholder="Nombre de artista" value="${state.loginName}" oninput="updateLoginField('loginName',this.value)" />`:''}
+            <input class="input-neon" id="inp-email" placeholder="Email" type="email" value="${state.loginEmail}" oninput="updateLoginField('loginEmail',this.value)" />
+            <input class="input-neon" id="inp-pass" placeholder="Contraseña" type="password" value="${state.loginPassword}" oninput="updateLoginField('loginPassword',this.value)" />
             ${state.loginError?`<div class="error-msg">${state.loginError}</div>`:''}
             <button class="btn-solid" onclick="${state.loginView==='login'?'loginEmail()':'registerEmail()'}" ${state.loginLoading?'disabled':''} style="margin-top:4px">
               ${state.loginLoading?'CARGANDO...':(state.loginView==='login'?'CONECTAR':'CREAR CUENTA')}
@@ -261,6 +268,7 @@
 
   function bindLogin() {
     window.setLoginView = v => setState({ loginView: v, loginError: "" });
+    window.updateLoginField = updateLoginField;
     window.loginEmail = loginEmail;
     window.registerEmail = registerEmail;
     window.loginGoogle = loginGoogle;
@@ -304,216 +312,4 @@
   function renderApp() {
     const filtered = state.tracks.filter(t => {
       const mg = state.activeGenre==="All" || t.genre===state.activeGenre;
-      const ms = t.title?.toLowerCase().includes(state.searchQuery.toLowerCase()) || t.artistName?.toLowerCase().includes(state.searchQuery.toLowerCase());
-      return mg && ms;
-    });
-
-    return `
-    <div style="min-height:100vh;background:#050508;font-family:'Share Tech Mono',monospace;color:#fff;padding-bottom:${state.currentTrack?90:0}px">
-      ${state.notification?`<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,255,200,0.15);border:1px solid rgba(0,255,200,0.5);color:#00ffc8;padding:10px 24px;z-index:1000;font-family:'Orbitron',monospace;font-size:12px;letter-spacing:1px;backdrop-filter:blur(10px);white-space:nowrap">${state.notification}</div>`:''}
-
-      <header style="border-bottom:1px solid rgba(0,255,200,0.1);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;background:rgba(5,5,8,0.95);backdrop-filter:blur(20px);z-index:100">
-        <span style="font-family:'Orbitron',monospace;font-size:18px;font-weight:900;color:#00ffc8;letter-spacing:4px;text-shadow:0 0 20px rgba(0,255,200,0.5)">◈ NEURØ</span>
-        <div style="display:flex;align-items:center;gap:6px;flex:1;max-width:260px;margin:0 12px">
-          <span style="color:rgba(255,255,255,0.3)">⌕</span>
-          <input class="input-neon" placeholder="Buscar..." value="${state.searchQuery}" oninput="setState({searchQuery:this.value})" style="font-size:12px" />
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <button class="btn-solid" style="padding:8px 14px;font-size:10px;width:auto" onclick="setState({uploadModal:true})">+ SUBIR</button>
-          <div style="cursor:pointer;font-size:22px" onclick="setState({view:'profile'})" title="${state.user?.displayName||'Perfil'}">
-            ${state.user?.photoURL?`<img src="${state.user.photoURL}" style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,255,200,0.4)" />`:'👤'}
-          </div>
-        </div>
-      </header>
-
-      <nav style="display:flex;justify-content:center;border-bottom:1px solid rgba(255,255,255,0.05);background:rgba(5,5,8,0.8)">
-        ${[{id:"feed",icon:"◈",label:"FEED"},{id:"explore",icon:"◎",label:"EXPLORAR"},{id:"artists",icon:"◉",label:"ARTISTAS"},{id:"profile",icon:"◍",label:"PERFIL"}].map(item=>`
-        <button class="nav-item" onclick="setState({view:'${item.id}'})" style="color:${state.view===item.id?'#00ffc8':'rgba(255,255,255,0.4)'};border-bottom:${state.view===item.id?'2px solid #00ffc8':'2px solid transparent'}">
-          <span style="font-size:14px">${item.icon}</span>
-          <span style="font-size:9px;letter-spacing:2px">${item.label}</span>
-        </button>`).join('')}
-      </nav>
-
-      <main style="max-width:1100px;margin:0 auto;padding:28px 16px">
-
-        ${state.view==='feed'?`
-        <div>
-          <div style="position:relative;padding:36px 28px;margin-bottom:28px;background:linear-gradient(135deg,rgba(0,255,200,0.05) 0%,rgba(0,128,255,0.05) 100%);border:1px solid rgba(0,255,200,0.15);overflow:hidden">
-            <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:4px;color:rgba(0,255,200,0.6);margin-bottom:10px">// PLATAFORMA DE</div>
-            <h1 style="font-family:'Orbitron',monospace;font-size:28px;font-weight:900;line-height:1.2;margin-bottom:14px">MÚSICA CREADA<br/><span style="color:#00ffc8;text-shadow:0 0 30px rgba(0,255,200,0.4)">CON IA</span></h1>
-            <p style="color:rgba(255,255,255,0.4);font-size:13px;line-height:1.7;max-width:480px">Sube, comparte y descubre tracks generados con herramientas de AI.</p>
-            <div style="display:flex;gap:12px;margin-top:20px">
-              <button class="btn-solid" style="width:auto;padding:10px 20px" onclick="setState({uploadModal:true})">SUBIR TRACK</button>
-              <button class="btn-neon" style="width:auto;padding:10px 20px" onclick="setState({view:'explore'})">EXPLORAR</button>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-bottom:24px;overflow-x:auto;padding-bottom:8px">
-            ${GENRES.map(g=>`<button class="genre-pill${state.activeGenre===g?' active':''}" onclick="setState({activeGenre:'${g}'})">${g}</button>`).join('')}
-          </div>
-          ${state.tracksLoading?`<div style="text-align:center;padding:60px 0;color:rgba(0,255,200,0.5);font-family:'Orbitron',monospace;letter-spacing:2px">CARGANDO TRACKS...</div>`:''}
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-            ${filtered.map((t,i)=>renderTrackCard(t,i)).join('')}
-          </div>
-          ${!state.tracksLoading&&filtered.length===0?`<div style="text-align:center;padding:60px 0;color:rgba(255,255,255,0.2);font-family:'Orbitron',monospace;letter-spacing:2px">NO SE ENCONTRARON TRACKS</div>`:''}
-        </div>`:''} 
-
-        ${state.view==='explore'?`
-        <div>
-          <h2 style="font-family:'Orbitron',monospace;font-size:22px;letter-spacing:3px;margin-bottom:8px;color:#00ffc8">EXPLORAR</h2>
-          <p style="color:rgba(255,255,255,0.3);margin-bottom:28px;font-size:13px">Los tracks más populares de la plataforma</p>
-          <div style="margin-bottom:32px">
-            <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,0.4);margin-bottom:14px;border-left:2px solid #00ffc8;padding-left:12px">TOP TRACKS</div>
-            <div style="display:flex;flex-direction:column;gap:4px">
-              ${[...state.tracks].sort((a,b)=>(b.plays||0)-(a.plays||0)).map((track,i)=>`
-              <div class="track-card" style="display:flex;align-items:center;gap:16px;padding:14px 20px" onclick="playTrack('${track.id}')">
-                <span style="font-family:'Orbitron',monospace;font-size:18px;font-weight:900;color:${i<3?'#00ffc8':'rgba(255,255,255,0.2)'};width:28px">${(i+1).toString().padStart(2,"0")}</span>
-                <span style="font-size:28px">${track.cover||'🎵'}</span>
-                <div style="flex:1"><div style="font-size:14px;margin-bottom:2px">${track.title}</div><div style="font-size:12px;color:rgba(255,255,255,0.4)">${track.artistName}</div></div>
-                <div style="font-size:11px;color:rgba(0,255,200,0.6);text-align:right"><div>${fnum(track.plays||0)} plays</div><div style="color:rgba(255,255,255,0.3)">${fmt(track.duration||0)}</div></div>
-              </div>`).join('')}
-            </div>
-          </div>
-          <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,0.4);margin-bottom:14px;border-left:2px solid #0080ff;padding-left:12px">POR GÉNERO</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-            ${GENRES.filter(g=>g!=="All").map(genre=>`
-            <div class="track-card" style="padding:20px;text-align:center" onclick="setState({activeGenre:'${genre}',view:'feed'})">
-              <div style="font-family:'Orbitron',monospace;font-size:13px;margin-bottom:6px;color:#00ffc8">${genre}</div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.3)">${state.tracks.filter(t=>t.genre===genre).length} tracks</div>
-            </div>`).join('')}
-          </div>
-        </div>`:''} 
-
-        ${state.view==='artists'?`
-        <div>
-          <h2 style="font-family:'Orbitron',monospace;font-size:22px;letter-spacing:3px;margin-bottom:8px;color:#00ffc8">ARTISTAS</h2>
-          <p style="color:rgba(255,255,255,0.3);margin-bottom:28px;font-size:13px">Creadores de música AI en la plataforma</p>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">
-            ${[...new Map(state.tracks.map(t=>[t.artistId,{name:t.artistName,id:t.artistId}])).values()].map(artist=>`
-            <div class="track-card" style="padding:28px;text-align:center">
-              <div style="font-size:52px;margin-bottom:12px">🎵</div>
-              <div style="font-family:'Orbitron',monospace;font-size:15px;margin-bottom:4px">${artist.name}</div>
-              <div style="display:flex;justify-content:center;gap:24px;margin-top:16px">
-                <div><div style="font-size:18px;font-weight:700;color:#00ffc8">${state.tracks.filter(t=>t.artistId===artist.id).length}</div><div style="font-size:11px;color:rgba(255,255,255,0.3)">TRACKS</div></div>
-                <div><div style="font-size:18px;font-weight:700;color:#00ffc8">${fnum(state.tracks.filter(t=>t.artistId===artist.id).reduce((a,b)=>a+(b.plays||0),0))}</div><div style="font-size:11px;color:rgba(255,255,255,0.3)">PLAYS</div></div>
-              </div>
-            </div>`).join('')}
-          </div>
-        </div>`:''} 
-
-        ${state.view==='profile'?`
-        <div>
-          <div style="display:flex;gap:24px;align-items:flex-start;margin-bottom:32px;padding:28px;border:1px solid rgba(0,255,200,0.1);background:rgba(0,255,200,0.02);flex-wrap:wrap">
-            ${state.user?.photoURL?`<img src="${state.user.photoURL}" style="width:80px;height:80px;border-radius:50%;border:2px solid rgba(0,255,200,0.4)" />`:'<div style="font-size:64px">👤</div>'}
-            <div style="flex:1;min-width:200px">
-              <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:900;color:#00ffc8;margin-bottom:6px">${state.user?.displayName||'Usuario'}</div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:16px">${state.user?.email}</div>
-              <div style="display:flex;gap:24px">
-                ${[["Tracks",state.tracks.filter(t=>t.artistId===state.user?.uid).length],["Plays",fnum(state.tracks.filter(t=>t.artistId===state.user?.uid).reduce((a,b)=>a+(b.plays||0),0))],["Likes",state.tracks.filter(t=>t.artistId===state.user?.uid).reduce((a,b)=>a+(b.likes||0),0)]].map(([l,v])=>`<div><div style="font-size:20px;font-weight:700">${v}</div><div style="font-size:11px;color:rgba(255,255,255,0.3)">${l}</div></div>`).join('')}
-              </div>
-            </div>
-            <button class="btn-neon" style="width:auto;padding:8px 20px" onclick="logout()">SALIR</button>
-          </div>
-          <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,0.4);margin-bottom:14px;border-left:2px solid #00ffc8;padding-left:12px">MIS TRACKS</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-            ${state.tracks.filter(t=>t.artistId===state.user?.uid).map((t,i)=>renderTrackCard(t,i)).join('')}
-          </div>
-          ${state.tracks.filter(t=>t.artistId===state.user?.uid).length===0?`
-          <div style="text-align:center;padding:40px 0;color:rgba(255,255,255,0.2)">
-            <div style="font-family:'Orbitron',monospace;letter-spacing:2px;margin-bottom:16px">AÚN NO TIENES TRACKS</div>
-            <button class="btn-solid" style="width:auto;padding:10px 24px" onclick="setState({uploadModal:true})">SUBIR PRIMER TRACK</button>
-          </div>`:''}
-        </div>`:''} 
-      </main>
-
-      ${state.currentTrack?`
-      <div style="position:fixed;bottom:0;left:0;right:0;background:rgba(5,5,8,0.97);border-top:1px solid rgba(0,255,200,0.2);padding:12px 20px;backdrop-filter:blur(20px);z-index:200">
-        <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:14px">
-          <span style="font-size:26px">${state.currentTrack.cover||'🎵'}</span>
-          <div style="min-width:100px">
-            <div style="font-size:13px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${state.currentTrack.title}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.4)">${state.currentTrack.artistName}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px;flex:1">
-            <button onclick="setState({isPlaying:!state.isPlaying})" style="background:none;border:none;cursor:pointer;font-size:24px;color:#00ffc8;text-shadow:0 0 15px rgba(0,255,200,0.6)">${state.isPlaying?'⏸':'▶'}</button>
-            <div style="flex:1;display:flex;align-items:center;gap:8px">
-              <span style="font-size:10px;color:rgba(255,255,255,0.4);min-width:30px">${fmt(Math.floor(state.currentTrack.duration*state.progress/100))}</span>
-              <div style="flex:1;height:3px;background:rgba(255,255,255,0.1);cursor:pointer" onclick="handleProgressClick(event)">
-                <div style="height:100%;width:${state.progress}%;background:linear-gradient(90deg,#00ffc8,#0080ff);transition:width 0.5s linear"></div>
-              </div>
-              <span style="font-size:10px;color:rgba(255,255,255,0.4);min-width:30px">${fmt(state.currentTrack.duration||0)}</span>
-            </div>
-          </div>
-          <button onclick="setState({currentTrack:null,isPlaying:false})" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.3);font-size:18px">✕</button>
-        </div>
-      </div>`:''}
-
-      ${state.uploadModal?`
-      <div style="position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px">
-        <div style="background:#080810;border:1px solid rgba(0,255,200,0.2);width:100%;max-width:480px;padding:32px;position:relative;max-height:90vh;overflow-y:auto">
-          <button onclick="setState({uploadModal:false,uploadStep:1})" style="position:absolute;top:14px;right:14px;background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:20px">✕</button>
-          <div style="display:flex;margin-bottom:24px">
-            ${[1,2].map(s=>`<div style="flex:1;height:2px;background:${state.uploadStep>=s?'#00ffc8':'rgba(255,255,255,0.1)'};transition:background 0.3s"></div>`).join('')}
-          </div>
-          <div style="font-family:'Orbitron',monospace;font-size:18px;font-weight:900;margin-bottom:4px;color:#00ffc8">${state.uploadStep===1?'SUBIR TRACK':'DETALLES'}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:24px">${state.uploadStep===1?'Paso 1/2 — Portada':'Paso 2/2 — Info del track'}</div>
-
-          ${state.uploadStep===1?`
-          <div style="display:flex;flex-direction:column;gap:18px">
-            <div style="border:2px dashed rgba(0,255,200,0.2);padding:28px 20px;text-align:center">
-              <div style="font-size:32px;margin-bottom:8px">⬆</div>
-              <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.4)">ARRASTRA TU AUDIO</div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.2);margin-top:4px">MP3, WAV hasta 50MB</div>
-            </div>
-            <div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:8px">PORTADA (EMOJI)</div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                ${EMOJI_COVERS.map(e=>`<button onclick="setUploadCover('${e}')" style="font-size:22px;background:${state.uploadForm.cover===e?'rgba(0,255,200,0.2)':'rgba(255,255,255,0.04)'};border:${state.uploadForm.cover===e?'1px solid #00ffc8':'1px solid rgba(255,255,255,0.08)'};padding:8px;cursor:pointer">${e}</button>`).join('')}
-              </div>
-            </div>
-            <button class="btn-solid" onclick="setState({uploadStep:2})">CONTINUAR →</button>
-          </div>`:`
-          <div style="display:flex;flex-direction:column;gap:14px">
-            <div><div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:8px">TÍTULO *</div><input class="input-neon" placeholder="Nombre del track" value="${state.uploadForm.title}" oninput="setUploadField('title',this.value)" /></div>
-            <div><div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:8px">GÉNERO *</div>
-              <select class="input-neon" onchange="setUploadField('genre',this.value)">
-                <option value="">Seleccionar género</option>
-                ${GENRES.filter(g=>g!=="All").map(g=>`<option value="${g}" ${state.uploadForm.genre===g?'selected':''}>${g}</option>`).join('')}
-              </select>
-            </div>
-            <div><div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:8px">HERRAMIENTA AI</div>
-              <select class="input-neon" onchange="setUploadField('aiModel',this.value)">
-                <option value="">Seleccionar herramienta</option>
-                ${AI_TOOLS.map(m=>`<option value="${m}" ${state.uploadForm.aiModel===m?'selected':''}>${m}</option>`).join('')}
-              </select>
-            </div>
-            <div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:8px">LINK DE AUDIO * (MP3, SoundCloud, Dropbox...)</div>
-              <input class="input-neon" placeholder="https://..." value="${state.uploadForm.audioUrl}" oninput="setUploadField('audioUrl',this.value)" />
-              <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:6px">Pega un link directo a tu archivo MP3 o WAV</div>
-            </div>
-            <div><div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:8px">TAGS</div><input class="input-neon" placeholder="dark, electronic, chill..." value="${state.uploadForm.tags}" oninput="setUploadField('tags',this.value)" /></div>
-            <div style="display:flex;gap:12px;margin-top:8px">
-              <button class="btn-neon" style="flex:1" onclick="setState({uploadStep:1})">← ATRÁS</button>
-              <button class="btn-solid" style="flex:2" onclick="uploadTrack()">PUBLICAR TRACK</button>
-            </div>
-          </div>`}
-        </div>
-      </div>`:''}
-    </div>`;
-  }
-
-  function bindApp() {
-    window.setState = setState;
-    window.playTrack = id => { const t = state.tracks.find(x=>x.id===id); if(t) playTrack(t); };
-    window.likeTrack = likeTrack;
-    window.logout = logout;
-    window.uploadTrack = uploadTrack;
-    window.setUploadField = (field, val) => setState({ uploadForm: { ...state.uploadForm, [field]: val } });
-    window.setUploadCover = cover => setState({ uploadForm: { ...state.uploadForm, cover } });
-    window.handleProgressClick = e => { const r=e.currentTarget.getBoundingClientRect(); const pct=(e.clientX-r.left)/r.width; if(audio.duration){audio.currentTime=audio.duration*pct;} setState({progress:pct*100}); };
-  }
-
-  render();
-</script>
-</body>
-</html>
+      const ms = t.title?.toLowerC
