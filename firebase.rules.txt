@@ -1,0 +1,83 @@
+// ═══════════════════════════════════════════════════════════
+//  FIREBASE FIRESTORE — Reglas de seguridad
+//  Pega esto en: Firebase Console → Firestore → Rules
+// ═══════════════════════════════════════════════════════════
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // USUARIOS — cada quien solo edita su propio perfil
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // TRACKS — lectura pública, escritura solo autenticados
+    match /tracks/{trackId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null &&
+        (resource.data.artistId == request.auth.uid ||
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['likes','plays']));
+      allow delete: if request.auth != null &&
+        resource.data.artistId == request.auth.uid;
+    }
+
+    // LIKES — solo el dueño puede crear/borrar su like
+    match /likes/{likeId} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == request.resource.data.userId;
+    }
+
+    // FOLLOWS — solo el follower puede crear/borrar
+    match /follows/{followId} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        request.auth.uid == resource.data.followerId ||
+        request.auth.uid == request.resource.data.followerId;
+    }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  FIREBASE STORAGE — Reglas de seguridad
+//  Pega esto en: Firebase Console → Storage → Rules
+// ═══════════════════════════════════════════════════════════
+
+/*
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Audio — solo el dueño sube, lectura pública
+    match /audio/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 50 * 1024 * 1024;  // máx 50 MB
+    }
+
+    // Portadas
+    match /covers/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024;   // máx 5 MB
+    }
+
+    // Avatares
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 2 * 1024 * 1024;   // máx 2 MB
+    }
+  }
+}
+*/
