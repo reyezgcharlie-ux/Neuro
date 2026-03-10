@@ -71,12 +71,6 @@
   function fnum(n) { return n>=1000?(n/1000).toFixed(1)+"k":String(n||0); }
 
   // ── STATE ──
-  let audio = new Audio();
-  audio.addEventListener('timeupdate', () => {
-    if (audio.duration) setState({ progress: (audio.currentTime / audio.duration) * 100 });
-  });
-  audio.addEventListener('ended', () => setState({ isPlaying: false, progress: 0 }));
-
   let state = {
     user: null, authLoading: true, view: "feed",
     tracks: [], tracksLoading: true,
